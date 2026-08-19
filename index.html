@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>마감합시다</title>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --primary: #4f46e5;
+      --primary-light: #eef2ff;
+      --success: #10b981;
+      --danger: #ef4444;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    header h1 { font-size: 1.15rem; font-weight: bold; }
+    .sync-status { font-size: 0.75rem; color: var(--success); font-weight: bold; }
+
+    .main-container { padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+
+    /* 상단 일일 목표 바 */
+    .daily-summary {
+      background: var(--card-bg);
+      padding: 1.2rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .daily-summary-text { flex-shrink: 0; }
+    .daily-summary-text span { font-size: 1.3rem; font-weight: bold; color: var(--primary); }
+    .daily-bar-container { flex-grow: 1; }
+    .daily-bar-bg { background: var(--border); height: 12px; border-radius: 6px; overflow: hidden; }
+    .daily-bar-fill { background: var(--success); height: 100%; width: 0%; transition: width 0.3s; }
+
+    /* 공통 카드 & 모듈 스타일 */
+    .dashboard-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .card-title { font-size: 1rem; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+
+    /* 캘린더 */
+    .cal-header { display: flex; justify-content: space-between; align-items: center; }
+    .btn-icon { background: var(--bg); border: 1px solid var(--border); padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .cal-day-name { text-align: center; font-size: 0.75rem; font-weight: bold; color: var(--text-muted); padding-bottom: 4px; }
+    .cal-cell {
+      min-height: 48px; border-radius: 6px; padding: 4px; font-size: 0.75rem;
+      display: flex; flex-direction: column; justify-content: space-between;
+      border: 1px solid transparent; background: #fafafa;
+    }
+    .cal-cell.today { border-color: var(--primary); font-weight: bold; }
+    .cal-cell.achieved { background: #d1fae5; }
+    .cal-cell.has-log { color: #065f46; font-weight: bold; }
+    .cal-log-text { font-size: 0.65rem; color: var(--text-muted); text-align: right; }
+
+    /* 마감 리스트 */
+    .card-list { display: flex; flex-direction: column; gap: 0.8rem; max-height: 500px; overflow-y: auto; }
+    .project-item {
+      border: 1px solid var(--border); border-radius: 8px; padding: 1rem;
+      display: flex; flex-direction: column; gap: 0.6rem; background: #fff;
+    }
+    .item-header { display: flex; justify-content: space-between; align-items: center; }
+    .badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: bold; }
+    .badge.short { background: #fef3c7; color: #92400e; }
+    .badge.long { background: #e0e7ff; color: #3730a3; }
+    .badge.dday { background: #fee2e2; color: var(--danger); }
+    .progress-bar-bg { background: var(--border); height: 6px; border-radius: 3px; overflow: hidden; }
+    .progress-bar-fill { background: var(--primary); height: 100%; }
+    .item-footer { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+    .input-mini { width: 80px; padding: 0.3rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.8rem; }
+
+    /* 글 추가 폼 */
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; align-items: end; }
+    .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-group label { font-size: 0.8rem; font-weight: bold; color: var(--text-muted); }
+    .form-group input, .form-group select { padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
+    .btn-submit { background: var(--primary); color: white; border: none; padding: 0.6rem; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+    /* 콘티 에디터 / 뷰 */
+    .conti-tabs { display: flex; gap: 0.4rem; overflow-x: auto; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+    .conti-tab-btn {
+      padding: 0.4rem 0.8rem; font-size: 0.8rem; border: 1px solid var(--border);
+      border-radius: 6px 6px 0 0; background: var(--bg); cursor: pointer; white-space: nowrap;
+    }
+    .conti-tab-btn.active { background: var(--card-bg); border-bottom-color: var(--card-bg); font-weight: bold; color: var(--primary); }
+    .conti-editor textarea {
+      width: 100%; height: 350px; border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.8rem; font-size: 0.9rem; line-height: 1.5; resize: vertical; margin-top: 0.5rem;
+    }
+
+    /* ------------------------------------------------ */
+    /* 유동형(반응형) 레이아웃 분기                      */
+    /* ------------------------------------------------ */
+    
+    /* PC 데스크톱 뷰 (3열 대시보드 구조) */
+    @media (min-width: 1024px) {
+      .bottom-nav { display: none; }
+      .pc-layout-grid {
+        display: grid;
+        grid-template-columns: 320px 1fr 1fr;
+        gap: 1.5rem;
+        align-items: start;
+      }
+      .col-full { grid-column: span 3; }
+    }
+
+    /* 태블릿 뷰 (2열 구조) */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .bottom-nav { display: none; }
+      .pc-layout-grid {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 1.2rem;
+      }
+      .col-tablet-full { grid-column: span 2; }
+    }
+
+    /* 모바일 뷰 (하단 탭 전환 앱 형태) */
+    @media (max-width: 767px) {
+      body { padding-bottom: 75px; }
+      .main-container { padding: 1rem; }
+      .daily-summary { flex-direction: column; align-items: stretch; gap: 0.6rem; text-align: center; }
+      
+      .pc-layout-grid { display: block; }
+      .mobile-tab-section { display: none; margin-bottom: 1rem; }
+      .mobile-tab-section.active { display: block; }
+
+      .bottom-nav {
+        position: fixed; bottom: 0; left: 0; right: 0; height: 60px;
+        background: var(--card-bg); border-top: 1px solid var(--border);
+        display: flex; justify-content: space-around; align-items: center; z-index: 30;
+      }
+      .nav-item {
+        display: flex; flex-direction: column; align-items: center;
+        color: var(--text-muted); cursor: pointer; font-size: 0.75rem;
+        border: none; background: none; width: 33.3%;
+      }
+      .nav-item.active { color: var(--primary); font-weight: bold; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>집필 & 마감 관리 대시보드</h1>
+    <span class="sync-status" id="syncStatus">동기화 연결 중...</span>
+  </header>
+
+  <div class="main-container">
+    <!-- 상단 일일 목표 바 -->
+    <div class="daily-summary">
+      <div class="daily-summary-text">
+        오늘 집필량: <span id="todayTotal">0</span> / 5,000자
+      </div>
+      <div class="daily-bar-container">
+        <div class="daily-bar-bg">
+          <div id="todayBar" class="daily-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 반응형 메인 컨텐츠 영역 -->
+    <div class="pc-layout-grid">
+      
+      <!-- 영역 1: 캘린더 -->
+      <div class="dashboard-card mobile-tab-section active" id="sec-cal">
+        <div class="cal-header">
+          <button class="btn-icon" onclick="prevMonth()">&lt;</button>
+          <span id="calMonthYear" style="font-weight:bold;"></span>
+          <button class="btn-icon" onclick="nextMonth()">&gt;</button>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+
+      <!-- 영역 2: 마감 목록 & 추가 -->
+      <div class="dashboard-card mobile-tab-section" id="sec-deadline">
+        <div class="card-title">진행 중인 마감 목록</div>
+        <div class="card-list" id="projectList"></div>
+        
+        <hr style="border:none; border-top:1px solid var(--border); margin:0.5rem 0;">
+        
+        <!-- 새 글 등록 폼 -->
+        <div class="card-title" style="font-size:0.9rem;">+ 새 마감글 추가</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>제목</label>
+            <input type="text" id="addTitle" placeholder="제목">
+          </div>
+          <div class="form-group">
+            <label>분류</label>
+            <select id="addType">
+              <option value="단편">단편</option>
+              <option value="장편">장편</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>마감일</label>
+            <input type="date" id="addDueDate">
+          </div>
+          <div class="form-group">
+            <label>예상 글자수</label>
+            <input type="number" id="addTargetChars" placeholder="20000">
+          </div>
+          <button class="btn-submit" onclick="submitNewProject()">추가</button>
+        </div>
+      </div>
+
+      <!-- 영역 3: 콘티 작성창 -->
+      <div class="dashboard-card col-tablet-full mobile-tab-section" id="sec-conti">
+        <div class="card-title">
+          <span>콘티 보관함</span>
+          <span style="font-size:0.75rem; color:var(--text-muted);" id="contiAutoSaveStatus">자동 저장 됨</span>
+        </div>
+        <div class="conti-tabs" id="contiTabs"></div>
+        <div class="conti-editor">
+          <textarea id="contiTextArea" placeholder="작업할 프로젝트를 위 탭에서 선택한 뒤 콘티를 작성해봐."></textarea>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 모바일 하단 네비게이션 바 -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="switchMobileTab('cal')">
+      <span>캘린더</span>
+    </button>
+    <button class="nav-item" onclick="switchMobileTab('deadline')">
+      <span>마감 목록</span>
+    </button>
+    <button class="nav-item" onclick="switchMobileTab('conti')">
+      <span>콘티 폴더</span>
+    </button>
+  </nav>
+
+  <script>
+    // -------------------------------------------------------------
+    // Firebase 설정
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const DAILY_TARGET = 5000;
+    let db = null;
+    let projects = [];
+    let currentCalDate = new Date();
+    let selectedContiDocId = null;
+    let saveTimeout = null;
+
+    try {
+      if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        
+        db.collection("deadline_projects").onSnapshot(snapshot => {
+          projects = [];
+          snapshot.forEach(doc => projects.push({ docId: doc.id, ...doc.data() }));
+          document.getElementById('syncStatus').innerText = '실시간 동기화 완료';
+          renderAll();
+        }, () => fallbackLocalStorage());
+      } else {
+        fallbackLocalStorage();
+      }
+    } catch(e) { fallbackLocalStorage(); }
+
+    function fallbackLocalStorage() {
+      document.getElementById('syncStatus').innerText = '로컬 모드';
+      try {
+        const saved = localStorage.getItem('writer_projects_v3');
+        projects = saved ? JSON.parse(saved) : [];
+      } catch(e) { projects = []; }
+      renderAll();
+    }
+
+    function saveData() {
+      if (!db) localStorage.setItem('writer_projects_v3', JSON.stringify(projects));
+    }
+
+    function formatDate(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // 모바일 탭 전환
+    function switchMobileTab(tab) {
+      document.querySelectorAll('.mobile-tab-section').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+      const sections = { cal: 'sec-cal', deadline: 'sec-deadline', conti: 'sec-conti' };
+      const indices = { cal: 0, deadline: 1, conti: 2 };
+
+      document.getElementById(sections[tab]).classList.add('active');
+      document.querySelectorAll('.nav-item')[indices[tab]].classList.add('active');
+    }
+
+    // 전체 렌더링
+    function renderAll() {
+      renderCalendar();
+      renderProjectList();
+      renderContiModule();
+    }
+
+    // 새 글 등록
+    async function submitNewProject() {
+      const title = document.getElementById('addTitle').value.trim();
+      const type = document.getElementById('addType').value;
+      const dueDate = document.getElementById('addDueDate').value;
+      const targetChars = parseInt(document.getElementById('addTargetChars').value) || 0;
+
+      if (!title) { alert('글 제목을 입력해.'); return; }
+      if (targetChars <= 0) { alert('예상 글자수를 입력해.'); return; }
+
+      const newProj = {
+        title, type, dueDate, targetChars,
+        conti: '',
+        logs: [],
+        createdAt: Date.now()
+      };
+
+      if (db) {
+        await db.collection("deadline_projects").add(newProj);
+      } else {
+        projects.push({ docId: String(Date.now()), ...newProj });
+        saveData();
+        renderAll();
+      }
+
+      document.getElementById('addTitle').value = '';
+      document.getElementById('addDueDate').value = '';
+      document.getElementById('addTargetChars').value = '';
+    }
+
+    // 글자 수 기록
+    async function logChars(docId) {
+      const input = document.getElementById(`log_input_${docId}`);
+      const count = parseInt(input.value);
+      if (!count || count <= 0) { alert('글자 수를 입력해.'); return; }
+
+      const todayStr = formatDate(new Date());
+      const p = projects.find(item => item.docId === docId);
+      if (!p) return;
+
+      const log = (p.logs || []).find(l => l.date === todayStr);
+      if (log) log.chars += count;
+      else {
+        if (!p.logs) p.logs = [];
+        p.logs.push({ date: todayStr, chars: count });
+      }
+
+      if (db) {
+        await db.collection("deadline_projects").doc(docId).update({ logs: p.logs });
+      } else {
+        saveData();
+        renderAll();
+      }
+      input.value = '';
+    }
+
+    // 캘린더 렌더링
+    function renderCalendar() {
+      const grid = document.getElementById('calendarGrid');
+      grid.innerHTML = '';
+
+      const y = currentCalDate.getFullYear();
+      const m = currentCalDate.getMonth();
+      document.getElementById('calMonthYear').innerText = `${y}년 ${m + 1}월`;
+
+      ['일', '월', '화', '수', '목', '금', '토'].forEach(d => {
+        grid.innerHTML += `<div class="cal-day-name">${d}</div>`;
+      });
+
+      const firstDay = new Date(y, m, 1).getDay();
+      const lastDate = new Date(y, m + 1, 0).getDate();
+      const todayStr = formatDate(new Date());
+
+      for (let i = 0; i < firstDay; i++) grid.innerHTML += `<div></div>`;
+
+      for (let d = 1; d <= lastDate; d++) {
+        const dateStr = formatDate(new Date(y, m, d));
+        let dayChars = 0;
+        projects.forEach(p => {
+          const l = (p.logs || []).find(log => log.date === dateStr);
+          if (l) dayChars += l.chars;
+        });
+
+        const isToday = dateStr === todayStr ? 'today' : '';
+        const isAchieved = dayChars >= DAILY_TARGET ? 'achieved' : '';
+        const hasLog = dayChars > 0 ? 'has-log' : '';
+
+        grid.innerHTML += `
+          <div class="cal-cell ${isToday} ${isAchieved} ${hasLog}">
+            <span>${d}</span>
+            <span class="cal-log-text">${dayChars > 0 ? (dayChars > 9999 ? Math.floor(dayChars/1000)+'k' : dayChars) : ''}</span>
+          </div>
+        `;
+      }
+    }
+
+    function prevMonth() { currentCalDate.setMonth(currentCalDate.getMonth() - 1); renderCalendar(); }
+    function nextMonth() { currentCalDate.setMonth(currentCalDate.getMonth() + 1); renderCalendar(); }
+
+    // 마감 리스트 렌더링
+    function renderProjectList() {
+      const listDiv = document.getElementById('projectList');
+      listDiv.innerHTML = '';
+
+      const todayStr = formatDate(new Date());
+      let todayTotal = 0;
+
+      if (projects.length === 0) {
+        listDiv.innerHTML = `<div style="text-align:center; color:var(--text-muted); padding:1.5rem 0;">등록된 마감이 없어.</div>`;
+      }
+
+      projects.forEach(p => {
+        const todayLog = (p.logs || []).find(l => l.date === todayStr);
+        if (todayLog) todayTotal += todayLog.chars;
+
+        const totalChars = (p.logs || []).reduce((sum, l) => sum + l.chars, 0);
+        const rate = Math.min(100, (totalChars / p.targetChars) * 100).toFixed(1);
+
+        let ddayStr = '기한 없음';
+        if (p.dueDate) {
+          const today = new Date(); today.setHours(0,0,0,0);
+          const due = new Date(p.dueDate); due.setHours(0,0,0,0);
+          const diff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+          ddayStr = diff === 0 ? 'D-Day' : (diff < 0 ? `D+${Math.abs(diff)}` : `D-${diff}`);
+        }
+
+        const item = document.createElement('div');
+        item.className = 'project-item';
+        item.innerHTML = `
+          <div class="item-header">
+            <div>
+              <span class="badge ${p.type === '단편' ? 'short' : 'long'}">${p.type}</span>
+              <strong style="margin-left:4px;">${p.title}</strong>
+            </div>
+            <span class="badge dday">${ddayStr}</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: ${rate}%;"></div>
+          </div>
+          <div class="item-footer">
+            <span>${totalChars.toLocaleString()} / ${p.targetChars.toLocaleString()}자 (${rate}%)</span>
+            <div style="display:flex; gap:4px;">
+              <input type="number" id="log_input_${p.docId}" class="input-mini" placeholder="분량">
+              <button class="btn-submit" style="padding:0.3rem 0.6rem; font-size:0.8rem;" onclick="logChars('${p.docId}')">기록</button>
+            </div>
+          </div>
+        `;
+        listDiv.appendChild(item);
+      });
+
+      document.getElementById('todayTotal').innerText = todayTotal.toLocaleString();
+      const dailyRate = Math.min(100, (todayTotal / DAILY_TARGET) * 100);
+      document.getElementById('todayBar').style.width = `${dailyRate}%`;
+    }
+
+    // 콘티 탭 및 에디터 렌더링
+    function renderContiModule() {
+      const tabContainer = document.getElementById('contiTabs');
+      tabContainer.innerHTML = '';
+
+      if (projects.length === 0) {
+        document.getElementById('contiTextArea').value = '';
+        document.getElementById('contiTextArea').disabled = true;
+        return;
+      }
+
+      document.getElementById('contiTextArea').disabled = false;
+
+      // 선택된 프로젝트가 없거나 유효하지 않으면 첫 번째 프로젝트로 지정
+      if (!selectedContiDocId || !projects.some(p => p.docId === selectedContiDocId)) {
+        selectedContiDocId = projects[0].docId;
+      }
+
+      projects.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = `conti-tab-btn ${p.docId === selectedContiDocId ? 'active' : ''}`;
+        btn.innerText = p.title;
+        btn.onclick = () => {
+          selectedContiDocId = p.docId;
+          renderContiModule();
+        };
+        tabContainer.appendChild(btn);
+      });
+
+      const currentProj = projects.find(p => p.docId === selectedContiDocId);
+      if (currentProj) {
+        document.getElementById('contiTextArea').value = currentProj.conti || '';
+      }
+    }
+
+    // 콘티 자동 저장 디바운싱
+    document.getElementById('contiTextArea').addEventListener('input', (e) => {
+      if (!selectedContiDocId) return;
+      const val = e.target.value;
+      const p = projects.find(item => item.docId === selectedContiDocId);
+      if (p) p.conti = val;
+
+      const statusEl = document.getElementById('contiAutoSaveStatus');
+      statusEl.innerText = '저장 중...';
+
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(async () => {
+        if (db) {
+          await db.collection("deadline_projects").doc(selectedContiDocId).update({ conti: val });
+        } else {
+          saveData();
+        }
+        statusEl.innerText = '자동 저장 됨';
+      }, 500);
+    });
+
+    window.onload = renderAll;
+  </script>
+</body>
+</html>
