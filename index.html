@@ -231,8 +231,8 @@
         <label>분류</label>
         <select id="mType" onchange="toggleTypeFields()">
           <option value="단편">단편</option>
-          <option value="장편">장편 (수동 마감)</option>
-          <option value="정기연재">정기 연재 (자동 주기 계산)</option>
+          <option value="장편">장편(자유형)</option>
+          <option value="정기">장편(주기형)</option>
         </select>
       </div>
 
@@ -246,9 +246,9 @@
         <div class="form-group" style="margin-bottom:0.5rem;">
           <label>연재 방식</label>
           <select id="mRecurMode" onchange="toggleRecurMode()">
-            <option value="weekly">요일 지정 연재 (예: 매주 월/목)</option>
-            <option value="interval">간격 연재 (예: 3일마다, 7일마다)</option>
-            <option value="monthly">매월 특정일 연재 (예: 1, 11, 21, 31일)</option>
+            <option value="weekly">요일 지정</option>
+            <option value="interval">간격 지정</option>
+            <option value="monthly">특정일 지정</option>
           </select>
         </div>
 
@@ -267,12 +267,12 @@
 
         <div class="form-group" id="recurIntervalGroup" style="display:none; margin-bottom:0.4rem;">
           <label>연재 간격 (일 단위)</label>
-          <input type="number" id="mRecurInterval" placeholder="예: 3 (3일마다 자동 계산)" min="1">
+          <input type="number" id="mRecurInterval" placeholder="" min="1">
         </div>
 
         <div class="form-group" id="recurMonthlyGroup" style="display:none; margin-bottom:0.4rem;">
           <label>매월 연재일 (쉼표로 구분해 여러 날짜 입력)</label>
-          <input type="text" id="mRecurMonthDays" placeholder="예: 1, 11, 21, 31">
+          <input type="text" id="mRecurMonthDays" placeholder="">
         </div>
       </div>
 
