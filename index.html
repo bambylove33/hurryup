@@ -130,12 +130,20 @@
       padding: 0.8rem; font-size: 0.9rem; resize: none; outline: none; font-family: monospace;
     }
 
+    /* 요일 선택 UI */
+    .weekday-selector { display: flex; gap: 4px; margin-top: 4px; }
+    .weekday-btn {
+      flex: 1; text-align: center; padding: 4px 0; font-size: 0.75rem; border: 1px solid var(--border);
+      border-radius: 4px; cursor: pointer; background: white; user-select: none;
+    }
+    .weekday-btn.active { background: var(--primary); color: white; border-color: var(--primary); font-weight: bold; }
+
     /* 모달 */
     .modal-overlay {
       display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center;
     }
-    .modal-box { background: white; padding: 1.2rem; border-radius: 8px; width: 90%; max-width: 420px; }
+    .modal-box { background: white; padding: 1.2rem; border-radius: 8px; width: 90%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
     .form-group { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.8rem; }
     .form-group label { font-size: 0.8rem; font-weight: bold; color: var(--text-muted); }
     .form-group input, .form-group select { padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; }
@@ -205,8 +213,8 @@
         <div class="file-list" id="fileList"></div>
         <!-- 텍스트 편집기 -->
         <div class="file-editor">
-          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;" id="currentEditingPath">파일을 선택해.</div>
-          <textarea id="contiEditor" placeholder="작성한 내용은 실시간으로 자동 저장돼."></textarea>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;" id="currentEditingPath">파일을 선택해 주십시오.</div>
+          <textarea id="contiEditor" placeholder="작성한 내용은 실시간으로 자동 저장됩니다."></textarea>
         </div>
       </div>
     </section>
@@ -220,27 +228,65 @@
       <input type="hidden" id="editProjId">
       
       <div class="form-group">
-        <label>글 제목</label>
-        <input type="text" id="mTitle" placeholder="예: 3화 원고">
+        <label>글 제목 (시리즈명)</label>
+        <input type="text" id="mTitle" placeholder="예: 나의 작품">
       </div>
       <div class="form-group">
         <label>분류</label>
-        <select id="mType" onchange="toggleEpField()">
+        <select id="mType" onchange="toggleTypeFields()">
           <option value="단편">단편</option>
-          <option value="장편">장편</option>
+          <option value="장편">장편 (수동 마감)</option>
+          <option value="정기연재">정기 연재 (자동 주기 계산)</option>
         </select>
       </div>
+
       <div class="form-group" id="epGroup" style="display:none;">
-        <label>회차 번호</label>
+        <label>현재 회차 번호</label>
         <input type="number" id="mEpisode" placeholder="예: 1">
       </div>
+
+      <!-- 주기 연재 속성 세부 폼 -->
+      <div id="recurringGroup" style="display:none; background:#f8fafc; border:1px solid var(--border); border-radius:6px; padding:0.6rem; margin-bottom:0.8rem;">
+        <div class="form-group" style="margin-bottom:0.5rem;">
+          <label>연재 방식</label>
+          <select id="mRecurMode" onchange="toggleRecurMode()">
+            <option value="weekly">요일 지정 연재 (예: 매주 월/목)</option>
+            <option value="interval">간격 연재 (예: 3일마다, 7일마다)</option>
+            <option value="monthly">매월 특정일 연재 (예: 매월 15일)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="recurDaysGroup" style="margin-bottom:0.4rem;">
+          <label>연재 요일 선택</label>
+          <div class="weekday-selector">
+            <div class="weekday-btn" data-day="0" onclick="toggleWeekday(this)">일</div>
+            <div class="weekday-btn" data-day="1" onclick="toggleWeekday(this)">월</div>
+            <div class="weekday-btn" data-day="2" onclick="toggleWeekday(this)">화</div>
+            <div class="weekday-btn" data-day="3" onclick="toggleWeekday(this)">수</div>
+            <div class="weekday-btn" data-day="4" onclick="toggleWeekday(this)">목</div>
+            <div class="weekday-btn" data-day="5" onclick="toggleWeekday(this)">금</div>
+            <div class="weekday-btn" data-day="6" onclick="toggleWeekday(this)">토</div>
+          </div>
+        </div>
+
+        <div class="form-group" id="recurIntervalGroup" style="display:none; margin-bottom:0.4rem;">
+          <label>연재 간격 (일 단위)</label>
+          <input type="number" id="mRecurInterval" placeholder="예: 3 (3일마다 자동 계산)" min="1">
+        </div>
+
+        <div class="form-group" id="recurMonthlyGroup" style="display:none; margin-bottom:0.4rem;">
+          <label>매월 연재일 (일자)</label>
+          <input type="number" id="mRecurMonthDay" placeholder="예: 15 (매월 15일)" min="1" max="31">
+        </div>
+      </div>
+
       <div class="form-group">
         <label>마감 예정일</label>
         <input type="date" id="mDueDate">
       </div>
       <div class="form-group">
-        <label>예상 글자 수</label>
-        <input type="number" id="mTargetChars" placeholder="예: 15000">
+        <label>예상 글자 수 (회차당 분량)</label>
+        <input type="number" id="mTargetChars" placeholder="예: 5000">
       </div>
       <div class="form-group">
         <label>식별 라벨 색상</label>
@@ -271,10 +317,55 @@
       renderExplorer();
     }
 
-    /* ---------------- 마감 목록 관련 ---------------- */
+    /* ---------------- 주기 및 날짜 계산 함수 ---------------- */
+    function getNextDueDate(baseDateStr, recurMode, recurDays, recurInterval, recurMonthDay) {
+      const base = baseDateStr ? new Date(baseDateStr) : new Date();
+      
+      if (recurMode === 'interval') {
+        const interval = parseInt(recurInterval) || 7;
+        const next = new Date(base);
+        next.setDate(next.getDate() + interval);
+        return next.toISOString().slice(0, 10);
+      } else if (recurMode === 'monthly') {
+        const targetDay = parseInt(recurMonthDay) || base.getDate();
+        let nextYear = base.getFullYear();
+        let nextMonth = base.getMonth() + 1;
+        
+        if (nextMonth > 11) {
+          nextMonth = 0;
+          nextYear += 1;
+        }
+        
+        // 해당 월의 마지막 날짜 확인
+        const maxDay = new Date(nextYear, nextMonth + 1, 0).getDate();
+        const finalDay = Math.min(targetDay, maxDay);
+        
+        const next = new Date(nextYear, nextMonth, finalDay);
+        return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+      } else {
+        // 요일 지정 연재
+        if (!recurDays || recurDays.length === 0) {
+          const next = new Date(base);
+          next.setDate(next.getDate() + 7);
+          return next.toISOString().slice(0, 10);
+        }
+        
+        let target = new Date(base);
+        for (let i = 1; i <= 14; i++) {
+          target.setDate(target.getDate() + 1);
+          if (recurDays.includes(target.getDay())) {
+            return target.toISOString().slice(0, 10);
+          }
+        }
+      }
+      return baseDateStr;
+    }
+
+    /* ---------------- 마감 목록 및 폼 ---------------- */
     function openProjectModal(id = null) {
       document.getElementById('editProjId').value = id || '';
       document.getElementById('modalHead').innerText = id ? '마감 수정' : '마감 등록';
+      document.querySelectorAll('.weekday-btn').forEach(btn => btn.classList.remove('active'));
 
       if (id) {
         const p = projects.find(item => item.id === id);
@@ -284,15 +375,29 @@
         document.getElementById('mDueDate').value = p.dueDate || '';
         document.getElementById('mTargetChars').value = p.targetChars;
         document.getElementById('mColor').value = p.color || '#4f46e5';
+
+        document.getElementById('mRecurMode').value = p.recurMode || 'weekly';
+        document.getElementById('mRecurInterval').value = p.recurInterval || '';
+        document.getElementById('mRecurMonthDay').value = p.recurMonthDay || '';
+        if (p.recurDays && Array.isArray(p.recurDays)) {
+          p.recurDays.forEach(d => {
+            const btn = document.querySelector(`.weekday-btn[data-day="${d}"]`);
+            if (btn) btn.classList.add('active');
+          });
+        }
       } else {
         document.getElementById('mTitle').value = '';
         document.getElementById('mType').value = '단편';
-        document.getElementById('mEpisode').value = '';
-        document.getElementById('mDueDate').value = '';
+        document.getElementById('mEpisode').value = '1';
+        document.getElementById('mDueDate').value = new Date().toISOString().slice(0, 10);
         document.getElementById('mTargetChars').value = '';
         document.getElementById('mColor').value = '#' + Math.floor(Math.random()*16777215).toString(16);
+        document.getElementById('mRecurMode').value = 'weekly';
+        document.getElementById('mRecurInterval').value = '7';
+        document.getElementById('mRecurMonthDay').value = '15';
       }
-      toggleEpField();
+      toggleTypeFields();
+      toggleRecurMode();
       document.getElementById('projectModal').style.display = 'flex';
     }
 
@@ -300,39 +405,72 @@
       document.getElementById('projectModal').style.display = 'none';
     }
 
-    function toggleEpField() {
+    function toggleTypeFields() {
       const type = document.getElementById('mType').value;
-      document.getElementById('epGroup').style.display = type === '장편' ? 'flex' : 'none';
+      document.getElementById('epGroup').style.display = (type === '장편' || type === '정기연재') ? 'flex' : 'none';
+      document.getElementById('recurringGroup').style.display = type === '정기연재' ? 'block' : 'none';
+    }
+
+    function toggleRecurMode() {
+      const mode = document.getElementById('mRecurMode').value;
+      document.getElementById('recurDaysGroup').style.display = mode === 'weekly' ? 'block' : 'none';
+      document.getElementById('recurIntervalGroup').style.display = mode === 'interval' ? 'flex' : 'none';
+      document.getElementById('recurMonthlyGroup').style.display = mode === 'monthly' ? 'flex' : 'none';
+    }
+
+    function toggleWeekday(el) {
+      el.classList.toggle('active');
     }
 
     function saveProject() {
       const id = document.getElementById('editProjId').value;
       const title = document.getElementById('mTitle').value.trim();
       const type = document.getElementById('mType').value;
-      const episode = document.getElementById('mEpisode').value;
-      const dueDate = document.getElementById('mDueDate').value;
+      const episode = parseInt(document.getElementById('mEpisode').value) || 1;
+      let dueDate = document.getElementById('mDueDate').value;
       const targetChars = parseInt(document.getElementById('mTargetChars').value) || 0;
       const color = document.getElementById('mColor').value;
 
-      if (!title) { alert('제목을 입력해.'); return; }
+      const recurMode = document.getElementById('mRecurMode').value;
+      const recurInterval = parseInt(document.getElementById('mRecurInterval').value) || 7;
+      const recurMonthDay = parseInt(document.getElementById('mRecurMonthDay').value) || 15;
+      const selectedDays = [];
+      document.querySelectorAll('.weekday-btn.active').forEach(b => {
+        selectedDays.push(parseInt(b.getAttribute('data-day')));
+      });
+
+      if (!title) { alert('제목을 입력해 주십시오.'); return; }
+
+      // 정기 연재인데 마감일이 없으면 다음 연재일로 자동 계산
+      if (type === '정기연재' && !dueDate) {
+        dueDate = getNextDueDate(new Date().toISOString().slice(0,10), recurMode, selectedDays, recurInterval, recurMonthDay);
+      }
 
       if (id) {
         const p = projects.find(item => item.id == id);
         p.title = title;
         p.type = type;
-        p.episode = type === '장편' ? episode : null;
+        p.episode = (type === '장편' || type === '정기연재') ? episode : null;
         p.dueDate = dueDate;
         p.targetChars = targetChars;
         p.color = color;
+        p.recurMode = recurMode;
+        p.recurInterval = recurInterval;
+        p.recurMonthDay = recurMonthDay;
+        p.recurDays = selectedDays;
       } else {
         projects.push({
           id: Date.now(),
           title,
           type,
-          episode: type === '장편' ? episode : null,
+          episode: (type === '장편' || type === '정기연재') ? episode : null,
           dueDate,
           targetChars,
           color,
+          recurMode,
+          recurInterval,
+          recurMonthDay,
+          recurDays: selectedDays,
           isUploaded: false,
           logs: [],
           files: [{ id: Date.now(), name: '콘티.txt', content: '' }]
@@ -346,11 +484,27 @@
     function toggleUpload(id) {
       const p = projects.find(item => item.id === id);
       p.isUploaded = !p.isUploaded;
+
+      // 정기연재 프로젝트의 업로드를 완료 처리했을 때 -> 다음 회차로 자동 갱신
+      if (p.isUploaded && p.type === '정기연재') {
+        setTimeout(() => {
+          if (confirm(`'${p.title}' ${p.episode}화 업로드가 완료되었습니다. 다음 회차(${p.episode + 1}화) 마감으로 자동 갱신할까요?`)) {
+            p.episode = (p.episode || 1) + 1;
+            p.dueDate = getNextDueDate(p.dueDate, p.recurMode, p.recurDays, p.recurInterval, p.recurMonthDay);
+            p.isUploaded = false;
+            
+            // 새 회차용 콘티 파일 자동 생성
+            p.files.push({ id: Date.now(), name: `콘티_${p.episode}화.txt`, content: '' });
+            saveState();
+          }
+        }, 200);
+      }
+
       saveState();
     }
 
     function deleteProject(id) {
-      if (confirm('이 마감 프로젝트를 삭제할까?')) {
+      if (confirm('이 마감 프로젝트를 삭제할까요?')) {
         projects = projects.filter(item => item.id !== id);
         if (selectedFolderId === id) { selectedFolderId = null; selectedFileId = null; }
         saveState();
@@ -387,6 +541,18 @@
           dday = diff === 0 ? 'D-Day' : (diff < 0 ? `D+${Math.abs(diff)}` : `D-${diff}`);
         }
 
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+        let recurDesc = '';
+        if (p.type === '정기연재') {
+          if (p.recurMode === 'weekly' && p.recurDays) {
+            recurDesc = ` [매주 ${p.recurDays.map(d => dayNames[d]).join(',')}]`;
+          } else if (p.recurMode === 'interval') {
+            recurDesc = ` [${p.recurInterval}일 주기]`;
+          } else if (p.recurMode === 'monthly') {
+            recurDesc = ` [매월 ${p.recurMonthDay || 15}일]`;
+          }
+        }
+
         const card = document.createElement('div');
         card.className = `project-card ${p.isUploaded ? 'uploaded' : ''}`;
         card.style.borderLeftColor = p.color;
@@ -395,6 +561,7 @@
             <div>
               <span class="badge" style="background:${p.color}">${p.type}${p.episode ? ` ${p.episode}화` : ''}</span>
               <strong style="margin-left:4px;">${p.title}</strong>
+              <span style="font-size:0.7rem; color:var(--text-muted);">${recurDesc}</span>
             </div>
             <label class="toggle-switch">
               <input type="checkbox" ${p.isUploaded ? 'checked' : ''} onchange="toggleUpload(${p.id})">
@@ -449,18 +616,20 @@
       let todaySum = 0;
 
       for (let d = 1; d <= lastDate; d++) {
+        const dateObj = new Date(y, m, d);
         const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         
-        // 날짜별 기록 및 마감 태그 추출
         let tagsHtml = '';
         projects.forEach(p => {
+          // 작성량
           const l = p.logs.find(log => log.date === dateStr);
           if (l) {
             tagsHtml += `<div class="cal-tag" style="background:${p.color}">+${l.chars}자</div>`;
             if (dateStr === todayStr) todaySum += l.chars;
           }
+          // 마감일 라벨
           if (p.dueDate === dateStr) {
-            tagsHtml += `<div class="cal-tag" style="background:${p.color}; outline:1px solid #000;">[마감] ${p.title}</div>`;
+            tagsHtml += `<div class="cal-tag" style="background:${p.color}; outline:1px solid #000;">[마감] ${p.title}${p.episode ? ` ${p.episode}화` : ''}</div>`;
           }
         });
 
@@ -483,7 +652,7 @@
       files.innerHTML = '';
 
       if (projects.length === 0) {
-        document.getElementById('currentEditingPath').innerText = '생성된 프로젝트가 없어.';
+        document.getElementById('currentEditingPath').innerText = '생성된 프로젝트가 없습니다.';
         document.getElementById('contiEditor').value = '';
         return;
       }
@@ -492,7 +661,6 @@
         selectedFolderId = projects[0].id;
       }
 
-      // 좌측 폴더 트리
       projects.forEach(p => {
         const item = document.createElement('div');
         item.className = `tree-item ${p.id === selectedFolderId ? 'active' : ''}`;
@@ -501,7 +669,6 @@
         tree.appendChild(item);
       });
 
-      // 중앙 파일 리스트
       const currentProj = projects.find(p => p.id === selectedFolderId);
       if (currentProj) {
         if (!currentProj.files) currentProj.files = [];
@@ -517,13 +684,12 @@
           files.appendChild(fItem);
         });
 
-        // 우측 파일 에디터
         const currentFile = currentProj.files.find(f => f.id === selectedFileId);
         if (currentFile) {
           document.getElementById('currentEditingPath').innerText = `${currentProj.title} > ${currentFile.name}`;
           document.getElementById('contiEditor').value = currentFile.content || '';
         } else {
-          document.getElementById('currentEditingPath').innerText = '선택된 파일이 없어.';
+          document.getElementById('currentEditingPath').innerText = '선택된 파일이 없습니다.';
           document.getElementById('contiEditor').value = '';
         }
       }
@@ -531,7 +697,7 @@
 
     function createContiFile() {
       if (!selectedFolderId) return;
-      const name = prompt('생성할 콘티 파일명을 입력해:', '새콘티.txt');
+      const name = prompt('생성할 콘티 파일명을 입력하십시오:', '새콘티.txt');
       if (!name) return;
 
       const p = projects.find(item => item.id === selectedFolderId);
@@ -544,14 +710,13 @@
     function deleteContiFile() {
       if (!selectedFolderId || !selectedFileId) return;
       const p = projects.find(item => item.id === selectedFolderId);
-      if (confirm('선택한 파일을 삭제할까?')) {
+      if (confirm('선택한 파일을 삭제할까요?')) {
         p.files = p.files.filter(f => f.id !== selectedFileId);
         selectedFileId = null;
         saveState();
       }
     }
 
-    // 콘티 내용 자동 저장
     document.getElementById('contiEditor').addEventListener('input', (e) => {
       if (!selectedFolderId || !selectedFileId) return;
       const p = projects.find(item => item.id === selectedFolderId);
@@ -583,9 +748,9 @@
         try {
           projects = JSON.parse(event.target.result);
           saveState();
-          alert('데이터를 성공적으로 복원했어!');
+          alert('데이터를 성공적으로 복원했습니다.');
         } catch (err) {
-          alert('올바른 JSON 백업 파일이 아니야.');
+          alert('올바른 JSON 백업 파일이 아닙니다.');
         }
       };
       reader.readAsText(file);
