@@ -57,7 +57,6 @@
     }
     .header-actions { display: flex; gap: 0.4rem; }
 
-    /* 요청하신 스크린샷 기준 디폴트 비율 적용 */
     .dashboard-layout {
       display: flex;
       width: 100vw;
@@ -73,7 +72,6 @@
       overflow: hidden;
     }
     
-    /* 1단 캘린더 (약 780px), 2단 마감목록 (약 450px), 3단 콘티창 (나머지) */
     #panel1 { width: 780px; min-width: 320px; flex-shrink: 0; }
     #panel2 { width: 450px; min-width: 300px; flex-shrink: 0; }
     #panel3 { flex: 1; min-width: 350px; }
@@ -114,7 +112,6 @@
     }
     .btn-danger { color: var(--danger); }
     
-    /* 캘린더 영역 */
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 0.5rem; }
     .cal-day-name { text-align: center; font-size: 0.75rem; font-weight: bold; color: #000000; padding: 4px 0; }
     .cal-cell {
@@ -139,7 +136,6 @@
     .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; }
     .toggle-switch { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; cursor: pointer; }
 
-    /* 타이머 영역 */
     .timer-section {
       background: #f8fafc;
       border: 1px solid var(--border);
@@ -220,7 +216,7 @@
     <div class="header-left">
       <h1>마감합시다</h1>
       <a href="https://postype.com" target="_blank" class="btn-postype">포스타입 업로드 바로가기 ↗</a>
-      <div class="header-clock" id="liveClock">2026-08-21 (금) 00:00:00</div>
+      <div class="header-clock" id="liveClock">0000-00-00 (월) 00:00:00</div>
     </div>
     <div class="header-actions">
       <button class="btn-sm btn-danger" onclick="resetAllData()">데이터 초기화</button>
@@ -231,7 +227,7 @@
   </header>
 
   <main class="dashboard-layout" id="dashboardLayout">
-    <!-- 1단: 캘린더 (디폴트 780px) -->
+    <!-- 1단: 캘린더 -->
     <section class="panel" id="panel1">
       <div class="panel-header">
         <span id="calTitle" style="color:#000000;">캘린더</span>
@@ -249,7 +245,7 @@
     <!-- 구분선 1 -->
     <div class="resizer" id="resizer1"></div>
 
-    <!-- 2단: 마감 목록 및 마감 타이머 (디폴트 450px) -->
+    <!-- 2단: 마감 목록 및 마감 타이머 -->
     <section class="panel" id="panel2">
       <div class="panel-header">
         <span>마감 목록</span>
@@ -281,7 +277,7 @@
     <!-- 구분선 2 -->
     <div class="resizer" id="resizer2"></div>
 
-    <!-- 3단: 콘티 탐색기 (가변 영역) -->
+    <!-- 3단: 콘티 탐색기 -->
     <section class="panel" id="panel3">
       <div class="panel-header">
         <span>콘티 탐색기</span>
@@ -400,9 +396,10 @@
     let selectedFolderId = null;
     let selectedFileId = null;
 
-    /* 타이머 변수 */
+    /* 타임스탬프 기반 타이머 변수 */
     let timerInterval = null;
-    let timerSeconds = 0;
+    let timerStartTime = 0;       // 시작 시점의 절대 타임스탬프 (ms)
+    let timerAccumulatedMs = 0;   // 일시정지 전까지 누적된 시간 (ms)
     let isTimerRunning = false;
 
     function updateClock() {
@@ -478,7 +475,7 @@
       if (resizer2 && panel2) makeResizable(resizer2, panel2);
     }
 
-    /* ---------------- 타이머 제어 ---------------- */
+    /* ---------------- 타임스탬프 동기화 타이머 ---------------- */
     function updateTimerDropdown() {
       const select = document.getElementById('timerProjSelect');
       const currentVal = select.value;
@@ -497,6 +494,14 @@
       return `${h}:${m}:${s}`;
     }
 
+    function getElapsedSeconds() {
+      if (!isTimerRunning) {
+        return Math.floor(timerAccumulatedMs / 1000);
+      }
+      const currentElapsed = Date.now() - timerStartTime;
+      return Math.floor((timerAccumulatedMs + currentElapsed) / 1000);
+    }
+
     function startTimer() {
       const projId = document.getElementById('timerProjSelect').value;
       if (!projId) {
@@ -506,6 +511,8 @@
 
       if (!isTimerRunning) {
         isTimerRunning = true;
+        timerStartTime = Date.now(); // 실제 현재 절대 시각 기록
+
         document.getElementById('timerProjSelect').disabled = true;
         document.getElementById('btnTimerStart').disabled = true;
         document.getElementById('btnTimerPause').disabled = false;
@@ -514,10 +521,10 @@
         const p = projects.find(item => item.id == projId);
         document.getElementById('timerSummary').innerText = `'${p.title}' 마감 집계 중...`;
 
+        // 주기적 갱신 (창을 벗어났다 돌아와도 Date.now() 기반이므로 정확함)
         timerInterval = setInterval(() => {
-          timerSeconds++;
-          document.getElementById('timerDisplay').innerText = formatTime(timerSeconds);
-        }, 1000);
+          document.getElementById('timerDisplay').innerText = formatTime(getElapsedSeconds());
+        }, 500);
       }
     }
 
@@ -525,6 +532,8 @@
       if (isTimerRunning) {
         clearInterval(timerInterval);
         isTimerRunning = false;
+        timerAccumulatedMs += (Date.now() - timerStartTime);
+
         document.getElementById('btnTimerStart').disabled = false;
         document.getElementById('btnTimerPause').disabled = true;
         document.getElementById('timerSummary').innerText = '타이머가 일시정지되었습니다.';
@@ -535,15 +544,16 @@
       const projId = document.getElementById('timerProjSelect').value;
       if (!projId) return;
 
+      const totalSec = getElapsedSeconds();
       clearInterval(timerInterval);
       isTimerRunning = false;
 
       const p = projects.find(item => item.id == projId);
-      const h = Math.floor(timerSeconds / 3600);
-      const m = Math.floor((timerSeconds % 3600) / 60);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
       const timeDesc = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
 
-      const inputVal = prompt(`'${p.title}' 마감이 종료되었습니다.\n작업 시간(${timeDesc}) 동안 집계된 작성 글자 수를 입력해 주십시오:`, '0');
+      const inputVal = prompt(`'${p.title}' 마감이 종료되었습니다.\n실제 작업 시간(${timeDesc}) 동안 작성한 글자 수를 입력해 주십시오:`, '0');
       const chars = parseInt(inputVal);
 
       if (!isNaN(chars) && chars > 0) {
@@ -563,7 +573,8 @@
         document.getElementById('timerSummary').innerText = '타이머가 기록 없이 종료되었습니다.';
       }
 
-      timerSeconds = 0;
+      timerStartTime = 0;
+      timerAccumulatedMs = 0;
       document.getElementById('timerDisplay').innerText = '00:00:00';
       document.getElementById('timerProjSelect').disabled = false;
       document.getElementById('btnTimerStart').disabled = false;
@@ -571,7 +582,7 @@
       document.getElementById('btnTimerStop').disabled = true;
     }
 
-    /* ---------------- 자유형 / 주기형 자동 마감 ---------------- */
+    /* ---------------- 스케줄 계산 로직 ---------------- */
     function generateSchedule(startDateStr, startEp, finalEp, recurMode, recurDays, recurInterval, recurMonthDaysStr) {
       let schedule = [];
       let sEp = parseInt(startEp) || 1;
@@ -801,12 +812,10 @@
       saveState();
     }
 
-    /* ---------------- 업로드 완료 및 다음 회차 전환 ---------------- */
     function toggleUpload(id) {
       const p = projects.find(item => item.id === id);
       p.isUploaded = !p.isUploaded;
 
-      // 1. 자유형 장편 업로드 완료 시 -> 다음 마감일 지정받아 회차 +1
       if (p.isUploaded && p.type === '장편(자유형)') {
         const nextEp = (p.currentEpisode || 1) + 1;
         setTimeout(() => {
@@ -823,7 +832,6 @@
         }, 200);
       }
 
-      // 2. 주기형 장편 업로드 완료 시 -> 다음 회차 일정 자동 반영
       if (p.isUploaded && p.type === '장편(주기형)') {
         const nextEp = (p.currentEpisode || 1) + 1;
         if (p.finalEpisode && nextEp > p.finalEpisode) {
@@ -906,7 +914,6 @@
       });
     }
 
-    /* ---------------- 캘린더 렌더링 ---------------- */
     function changeMonth(delta) {
       calDate.setMonth(calDate.getMonth() + delta);
       renderCalendar();
@@ -968,7 +975,6 @@
       document.getElementById('todayCharSum').innerText = todaySum.toLocaleString();
     }
 
-    /* ---------------- 콘티 탐색기 ---------------- */
     function renderExplorer() {
       const tree = document.getElementById('treeView');
       const files = document.getElementById('fileList');
