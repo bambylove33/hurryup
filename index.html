@@ -252,10 +252,9 @@
         <button class="btn-sm" style="background:var(--primary); color:white;" onclick="openProjectModal()">+ 마감 등록</button>
       </div>
       <div class="panel-body" style="display:flex; flex-direction:column; gap:0.6rem; overflow:hidden;">
-        <!-- 마감 목록 (스크롤) -->
         <div id="projectList" style="flex:1; overflow-y:auto; padding-right:2px;"></div>
 
-        <!-- 마감 타이머 (하단 고정) -->
+        <!-- 마감 타이머 -->
         <div class="timer-section">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <strong style="font-size:0.85rem; color:var(--text);">⏱️ 마감 타이머</strong>
@@ -396,10 +395,9 @@
     let selectedFolderId = null;
     let selectedFileId = null;
 
-    /* 타임스탬프 기반 타이머 변수 */
     let timerInterval = null;
-    let timerStartTime = 0;       // 시작 시점의 절대 타임스탬프 (ms)
-    let timerAccumulatedMs = 0;   // 일시정지 전까지 누적된 시간 (ms)
+    let timerStartTime = 0;
+    let timerAccumulatedMs = 0;
     let isTimerRunning = false;
 
     function updateClock() {
@@ -475,7 +473,7 @@
       if (resizer2 && panel2) makeResizable(resizer2, panel2);
     }
 
-    /* ---------------- 타임스탬프 동기화 타이머 ---------------- */
+    /* ---------------- 타이머 제어 ---------------- */
     function updateTimerDropdown() {
       const select = document.getElementById('timerProjSelect');
       const currentVal = select.value;
@@ -511,7 +509,7 @@
 
       if (!isTimerRunning) {
         isTimerRunning = true;
-        timerStartTime = Date.now(); // 실제 현재 절대 시각 기록
+        timerStartTime = Date.now();
 
         document.getElementById('timerProjSelect').disabled = true;
         document.getElementById('btnTimerStart').disabled = true;
@@ -521,7 +519,6 @@
         const p = projects.find(item => item.id == projId);
         document.getElementById('timerSummary').innerText = `'${p.title}' 마감 집계 중...`;
 
-        // 주기적 갱신 (창을 벗어났다 돌아와도 Date.now() 기반이므로 정확함)
         timerInterval = setInterval(() => {
           document.getElementById('timerDisplay').innerText = formatTime(getElapsedSeconds());
         }, 500);
@@ -863,6 +860,7 @@
       }
     }
 
+    /* ---------------- 마감 목록 렌더링 (D-Day 타임존 버그 해결) ---------------- */
     function renderProjects() {
       const container = document.getElementById('projectList');
       container.innerHTML = '';
@@ -874,7 +872,12 @@
         
         let dday = '기한 없음';
         if (p.dueDate) {
-          const diff = Math.ceil((new Date(p.dueDate) - new Date(new Date().toISOString().slice(0,10))) / (1000 * 60 * 60 * 24));
+          const [tY, tM, tD] = p.dueDate.split('-').map(Number);
+          const targetDate = new Date(tY, tM - 1, tD, 0, 0, 0);
+          const now = new Date();
+          const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+          const diff = Math.round((targetDate - todayDate) / (1000 * 60 * 60 * 24));
           dday = diff === 0 ? 'D-Day' : (diff < 0 ? `D+${Math.abs(diff)}` : `D-${diff}`);
         }
 
@@ -914,6 +917,7 @@
       });
     }
 
+    /* ---------------- 캘린더 렌더링 ---------------- */
     function changeMonth(delta) {
       calDate.setMonth(calDate.getMonth() + delta);
       renderCalendar();
@@ -933,7 +937,9 @@
 
       const firstDay = new Date(y, m, 1).getDay();
       const lastDate = new Date(y, m + 1, 0).getDate();
-      const todayStr = new Date().toISOString().slice(0, 10);
+      
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
       for (let i = 0; i < firstDay; i++) grid.innerHTML += `<div></div>`;
 
@@ -975,6 +981,7 @@
       document.getElementById('todayCharSum').innerText = todaySum.toLocaleString();
     }
 
+    /* ---------------- 콘티 탐색기 ---------------- */
     function renderExplorer() {
       const tree = document.getElementById('treeView');
       const files = document.getElementById('fileList');
