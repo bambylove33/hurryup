@@ -860,12 +860,26 @@
       }
     }
 
-    /* ---------------- 마감 목록 렌더링 (D-Day 타임존 버그 해결) ---------------- */
+    /* ---------------- 마감 목록 렌더링 (D-Day 임박 순 정렬) ---------------- */
     function renderProjects() {
       const container = document.getElementById('projectList');
       container.innerHTML = '';
 
-      projects.forEach(p => {
+      const now = new Date();
+      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+      // 마감 임박 순(D-Day 오름차순)으로 정렬하여 표시
+      const sortedProjects = [...projects].sort((a, b) => {
+        const getDiff = (proj) => {
+          if (!proj.dueDate) return Infinity; // 마감일 없는 항목은 맨 뒤로
+          const [y, m, d] = proj.dueDate.split('-').map(Number);
+          const target = new Date(y, m - 1, d, 0, 0, 0);
+          return Math.round((target - todayDate) / (1000 * 60 * 60 * 24));
+        };
+        return getDiff(a) - getDiff(b);
+      });
+
+      sortedProjects.forEach(p => {
         const currentEp = p.currentEpisode || 1;
         const currentEpChars = p.logs.filter(l => (p.type === '단편' || l.episode === currentEp)).reduce((sum, l) => sum + l.chars, 0);
         const rate = Math.min(100, (currentEpChars / p.targetChars) * 100 || 0).toFixed(1);
@@ -874,9 +888,6 @@
         if (p.dueDate) {
           const [tY, tM, tD] = p.dueDate.split('-').map(Number);
           const targetDate = new Date(tY, tM - 1, tD, 0, 0, 0);
-          const now = new Date();
-          const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-
           const diff = Math.round((targetDate - todayDate) / (1000 * 60 * 60 * 24));
           dday = diff === 0 ? 'D-Day' : (diff < 0 ? `D+${Math.abs(diff)}` : `D-${diff}`);
         }
