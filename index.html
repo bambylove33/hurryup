@@ -105,6 +105,34 @@
       flex: 1;
     }
 
+    /* 마감 목록 탭 스위치 스타일 */
+    .list-tabs {
+      display: flex;
+      background: #e2e8f0;
+      padding: 3px;
+      border-radius: 6px;
+      gap: 4px;
+      margin-bottom: 0.6rem;
+      flex-shrink: 0;
+    }
+    .list-tab-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 0.35rem;
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: var(--text-muted);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .list-tab-btn.active {
+      background: #ffffff;
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
     .cal-nav { display: flex; gap: 0.3rem; }
     .btn-sm {
       background: white; border: 1px solid var(--border);
@@ -131,7 +159,7 @@
       margin-bottom: 0.8rem; background: #ffffff; display: flex; flex-direction: column; gap: 0.5rem;
       border-left-width: 6px;
     }
-    .project-card.uploaded { opacity: 0.6; }
+    .project-card.uploaded { opacity: 0.7; background: #f8fafc; }
     .card-top { display: flex; justify-content: space-between; align-items: center; }
     .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; }
     .toggle-switch { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; cursor: pointer; }
@@ -251,10 +279,18 @@
         <span>마감 목록</span>
         <button class="btn-sm" style="background:var(--primary); color:white;" onclick="openProjectModal()">+ 마감 등록</button>
       </div>
-      <div class="panel-body" style="display:flex; flex-direction:column; gap:0.6rem; overflow:hidden;">
+      <div class="panel-body" style="display:flex; flex-direction:column; gap:0.4rem; overflow:hidden;">
+        
+        <!-- 진행 중 / 완료됨 탭 스위치 -->
+        <div class="list-tabs">
+          <button class="list-tab-btn active" id="tabActive" onclick="switchListTab('active')">진행 중 (0)</button>
+          <button class="list-tab-btn" id="tabCompleted" onclick="switchListTab('completed')">완료됨 (0)</button>
+        </div>
+
+        <!-- 마감 목록 본문 (스크롤) -->
         <div id="projectList" style="flex:1; overflow-y:auto; padding-right:2px;"></div>
 
-        <!-- 마감 타이머 -->
+        <!-- 마감 타이머 (하단 고정) -->
         <div class="timer-section">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <strong style="font-size:0.85rem; color:var(--text);">⏱️ 마감 타이머</strong>
@@ -394,6 +430,7 @@
     let calDate = new Date();
     let selectedFolderId = null;
     let selectedFileId = null;
+    let currentListTab = 'active'; // 'active' (진행 중) | 'completed' (완료됨)
 
     let timerInterval = null;
     let timerStartTime = 0;
@@ -473,12 +510,36 @@
       if (resizer2 && panel2) makeResizable(resizer2, panel2);
     }
 
+    /* ---------------- 마감 목록 탭 전환 ---------------- */
+    function switchListTab(tabName) {
+      currentListTab = tabName;
+      document.getElementById('tabActive').classList.toggle('active', tabName === 'active');
+      document.getElementById('tabCompleted').classList.toggle('active', tabName === 'completed');
+      renderProjects();
+    }
+
+    // 프로젝트 최종 완료 여부 판별
+    function isProjectFinished(p) {
+      if (p.isCompletedManual) return true;
+      if (p.type === '단편') {
+        return !!p.isUploaded;
+      }
+      // 장편: 최종 회차 완결 도달 여부
+      if (p.finalEpisode && (p.currentEpisode || 1) >= p.finalEpisode && p.isUploaded) {
+        return true;
+      }
+      return false;
+    }
+
     /* ---------------- 타이머 제어 ---------------- */
     function updateTimerDropdown() {
       const select = document.getElementById('timerProjSelect');
       const currentVal = select.value;
       select.innerHTML = '<option value="">작품 선택...</option>';
-      projects.forEach(p => {
+      
+      // 타이머에는 진행 중인 작품만 노출
+      const activeProjects = projects.filter(p => !isProjectFinished(p));
+      activeProjects.forEach(p => {
         let epText = p.type !== '단편' ? ` (${p.currentEpisode || 1}화)` : '';
         select.innerHTML += `<option value="${p.id}">${p.title}${epText}</option>`;
       });
@@ -800,6 +861,7 @@
           recurDays: selectedDays,
           schedule: isRecurring ? schedule : [],
           isUploaded: false,
+          isCompletedManual: false,
           logs: [],
           files: [{ id: Date.now(), name: '콘티.txt', content: '' }]
         });
@@ -813,26 +875,42 @@
       const p = projects.find(item => item.id === id);
       p.isUploaded = !p.isUploaded;
 
+      // 1. 단편: 업로드 완료 시 즉시 완료 목록으로 이동
+      if (p.type === '단편') {
+        saveState();
+        return;
+      }
+
+      // 2. 장편(자유형)
       if (p.isUploaded && p.type === '장편(자유형)') {
         const nextEp = (p.currentEpisode || 1) + 1;
         setTimeout(() => {
-          const nextDate = prompt(`'${p.title}' ${p.currentEpisode}화 업로드가 완료되었습니다.\n다음 회차(${nextEp}화)의 마감 예정일을 지정해 주십시오 (YYYY-MM-DD):`, new Date().toISOString().slice(0,10));
-          if (nextDate) {
-            p.currentEpisode = nextEp;
-            p.dueDate = nextDate;
-            p.isUploaded = false;
-            p.files.push({ id: Date.now(), name: `콘티_${nextEp}화.txt`, content: '' });
+          if (confirm(`'${p.title}' ${p.currentEpisode}화 업로드가 완료되었습니다.\n작품을 완전히 완결 처리하시겠습니까? ('취소' 시 다음 회차 마감일을 설정합니다)`)) {
+            p.isCompletedManual = true;
             saveState();
           } else {
-            saveState();
+            const nextDate = prompt(`다음 회차(${nextEp}화)의 마감 예정일을 지정해 주십시오 (YYYY-MM-DD):`, new Date().toISOString().slice(0,10));
+            if (nextDate) {
+              p.currentEpisode = nextEp;
+              p.dueDate = nextDate;
+              p.isUploaded = false;
+              p.files.push({ id: Date.now(), name: `콘티_${nextEp}화.txt`, content: '' });
+              saveState();
+            } else {
+              saveState();
+            }
           }
         }, 200);
+        return;
       }
 
+      // 3. 장편(주기형)
       if (p.isUploaded && p.type === '장편(주기형)') {
         const nextEp = (p.currentEpisode || 1) + 1;
-        if (p.finalEpisode && nextEp > p.finalEpisode) {
-          alert(`'${p.title}' 완결(${p.finalEpisode}화) 마감까지 모두 완료되었습니다!`);
+        if (p.finalEpisode && (p.currentEpisode || 1) >= p.finalEpisode) {
+          alert(`'${p.title}' 완결(${p.finalEpisode}화) 마감까지 모두 완료되어 완료 목록으로 이동합니다.`);
+          p.isCompletedManual = true;
+          saveState();
         } else {
           setTimeout(() => {
             if (confirm(`'${p.title}' ${p.currentEpisode}화 업로드가 완료되었습니다. 다음 회차(${nextEp}화) 마감으로 진행하시겠습니까?`)) {
@@ -845,11 +923,25 @@
               }
               p.files.push({ id: Date.now(), name: `콘티_${nextEp}화.txt`, content: '' });
               saveState();
+            } else {
+              saveState();
             }
           }, 200);
         }
+        return;
       }
+
       saveState();
+    }
+
+    // 완료된 작품을 다시 '진행 중'으로 복원하는 함수
+    function restoreProject(id) {
+      const p = projects.find(item => item.id === id);
+      if (confirm(`'${p.title}' 작품을 다시 '진행 중' 마감 목록으로 복원하시겠습니까?`)) {
+        p.isUploaded = false;
+        p.isCompletedManual = false;
+        saveState();
+      }
     }
 
     function deleteProject(id) {
@@ -860,7 +952,7 @@
       }
     }
 
-    /* ---------------- 마감 목록 렌더링 (D-Day 임박 순 정렬) ---------------- */
+    /* ---------------- 마감 목록 렌더링 (탭 스위치 적용) ---------------- */
     function renderProjects() {
       const container = document.getElementById('projectList');
       container.innerHTML = '';
@@ -868,10 +960,27 @@
       const now = new Date();
       const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
 
-      // 마감 임박 순(D-Day 오름차순)으로 정렬하여 표시
-      const sortedProjects = [...projects].sort((a, b) => {
+      // 탭 카운트 계산
+      const activeProjects = projects.filter(p => !isProjectFinished(p));
+      const completedProjects = projects.filter(p => isProjectFinished(p));
+
+      document.getElementById('tabActive').innerText = `진행 중 (${activeProjects.length})`;
+      document.getElementById('tabCompleted').innerText = `완료됨 (${completedProjects.length})`;
+
+      // 현재 선택된 탭의 목록 선택
+      const currentList = currentListTab === 'active' ? activeProjects : completedProjects;
+
+      if (currentList.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:2rem 1rem; font-size:0.85rem; color:var(--text-muted);">
+          ${currentListTab === 'active' ? '진행 중인 마감이 없습니다.' : '완료된 마감이 없습니다.'}
+        </div>`;
+        return;
+      }
+
+      // D-Day 임박 순 정렬
+      const sortedProjects = [...currentList].sort((a, b) => {
         const getDiff = (proj) => {
-          if (!proj.dueDate) return Infinity; // 마감일 없는 항목은 맨 뒤로
+          if (!proj.dueDate) return Infinity;
           const [y, m, d] = proj.dueDate.split('-').map(Number);
           const target = new Date(y, m - 1, d, 0, 0, 0);
           return Math.round((target - todayDate) / (1000 * 60 * 60 * 24));
@@ -899,8 +1008,9 @@
           epInfo = ` ${p.currentEpisode || 1}화`;
         }
 
+        const isDone = isProjectFinished(p);
         const card = document.createElement('div');
-        card.className = `project-card ${p.isUploaded ? 'uploaded' : ''}`;
+        card.className = `project-card ${isDone ? 'uploaded' : ''}`;
         card.style.borderLeftColor = p.color;
         card.innerHTML = `
           <div class="card-top">
@@ -908,10 +1018,14 @@
               <span class="badge" style="background:${p.color}">${p.type}${epInfo}</span>
               <strong style="margin-left:4px;">${p.title}</strong>
             </div>
-            <label class="toggle-switch">
-              <input type="checkbox" ${p.isUploaded ? 'checked' : ''} onchange="toggleUpload(${p.id})">
-              <span>${p.isUploaded ? '업로드 완료' : '미완료'}</span>
-            </label>
+            ${currentListTab === 'active' ? `
+              <label class="toggle-switch">
+                <input type="checkbox" ${p.isUploaded ? 'checked' : ''} onchange="toggleUpload(${p.id})">
+                <span>${p.isUploaded ? '업로드 완료' : '미완료'}</span>
+              </label>
+            ` : `
+              <span style="font-size:0.75rem; color:var(--success); font-weight:bold;">완결/완료</span>
+            `}
           </div>
 
           <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted);">
@@ -920,6 +1034,9 @@
           </div>
 
           <div style="display:flex; justify-content:flex-end; gap:0.4rem; margin-top:2px;">
+            ${currentListTab === 'completed' ? `
+              <button class="btn-sm" onclick="restoreProject(${p.id})">진행중 복원</button>
+            ` : ''}
             <button class="btn-sm" onclick="openProjectModal(${p.id})">수정</button>
             <button class="btn-sm btn-danger" onclick="deleteProject(${p.id})">삭제</button>
           </div>
