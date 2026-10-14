@@ -105,7 +105,6 @@
       flex: 1;
     }
 
-    /* 마감 목록 탭 스위치 스타일 */
     .list-tabs {
       display: flex;
       background: #e2e8f0;
@@ -149,9 +148,15 @@
     }
     .cal-cell.today { border-color: var(--primary); font-weight: bold; }
     .cal-tags { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; overflow-y: auto; max-height: 60px; }
-    .cal-tag {
-      font-size: 0.65rem; color: #000000; font-weight: bold; padding: 2px 4px; border-radius: 2px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    
+    /* 개선된 캘린더 태그 스타일 */
+    .cal-tag-due {
+      font-size: 0.65rem; color: #ffffff; font-weight: bold; padding: 2px 4px; border-radius: 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .cal-tag-char {
+      font-size: 0.65rem; color: #15803d; background: #dcfce7; border: 1px solid #86efac; font-weight: bold; padding: 1px 4px; border-radius: 10px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; width: fit-content;
     }
 
     .project-card {
@@ -225,11 +230,20 @@
       display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center;
     }
-    .modal-box { background: white; padding: 1.2rem; border-radius: 8px; width: 90%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+    .modal-box { background: white; padding: 1.2rem; border-radius: 8px; width: 90%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
     .form-group { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.8rem; }
     .form-group label { font-size: 0.8rem; font-weight: bold; color: var(--text-muted); }
     .form-group input, .form-group select { padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; }
     .flex-row { display: flex; gap: 0.5rem; }
+
+    /* 히스토리 테이블 스타일 */
+    .history-table {
+      width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.8rem;
+    }
+    .history-table th, .history-table td {
+      border-bottom: 1px solid var(--border); padding: 0.5rem; text-align: left;
+    }
+    .history-table th { background: #f8fafc; color: var(--text-muted); font-weight: bold; }
 
     @media (max-width: 900px) {
       .dashboard-layout { display: flex; flex-direction: column; height: auto; overflow: visible; }
@@ -247,6 +261,7 @@
       <div class="header-clock" id="liveClock">0000-00-00 (월) 00:00:00</div>
     </div>
     <div class="header-actions">
+      <button class="btn-sm" style="background:#e0e7ff; color:var(--primary); font-weight:bold;" onclick="openHistoryModal()">마감 기록 내역 📜</button>
       <button class="btn-sm btn-danger" onclick="resetAllData()">데이터 초기화</button>
       <button class="btn-sm" onclick="exportData()">데이터 백업(JSON)</button>
       <button class="btn-sm" onclick="importData()">데이터 복원</button>
@@ -287,10 +302,10 @@
           <button class="list-tab-btn" id="tabCompleted" onclick="switchListTab('completed')">완료됨 (0)</button>
         </div>
 
-        <!-- 마감 목록 본문 (스크롤) -->
+        <!-- 마감 목록 본문 -->
         <div id="projectList" style="flex:1; overflow-y:auto; padding-right:2px;"></div>
 
-        <!-- 마감 타이머 (하단 고정) -->
+        <!-- 마감 타이머 -->
         <div class="timer-section">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <strong style="font-size:0.85rem; color:var(--text);">⏱️ 마감 타이머</strong>
@@ -425,12 +440,36 @@
     </div>
   </div>
 
+  <!-- 마감 기록 내역 모달 -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h3 style="font-size:1.1rem;">📜 마감 작업 히스토리</h3>
+        <button class="btn-sm" onclick="closeHistoryModal()">닫기</button>
+      </div>
+      <div style="max-height:60vh; overflow-y:auto;">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>일시</th>
+              <th>작품명 (회차)</th>
+              <th>작업 시간</th>
+              <th>작성량</th>
+              <th>삭제</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script>
     let projects = JSON.parse(localStorage.getItem('writer_board_data')) || [];
     let calDate = new Date();
     let selectedFolderId = null;
     let selectedFileId = null;
-    let currentListTab = 'active'; // 'active' (진행 중) | 'completed' (완료됨)
+    let currentListTab = 'active';
 
     let timerInterval = null;
     let timerStartTime = 0;
@@ -510,7 +549,6 @@
       if (resizer2 && panel2) makeResizable(resizer2, panel2);
     }
 
-    /* ---------------- 마감 목록 탭 전환 ---------------- */
     function switchListTab(tabName) {
       currentListTab = tabName;
       document.getElementById('tabActive').classList.toggle('active', tabName === 'active');
@@ -518,26 +556,19 @@
       renderProjects();
     }
 
-    // 프로젝트 최종 완료 여부 판별
     function isProjectFinished(p) {
       if (p.isCompletedManual) return true;
-      if (p.type === '단편') {
-        return !!p.isUploaded;
-      }
-      // 장편: 최종 회차 완결 도달 여부
-      if (p.finalEpisode && (p.currentEpisode || 1) >= p.finalEpisode && p.isUploaded) {
-        return true;
-      }
+      if (p.type === '단편') return !!p.isUploaded;
+      if (p.finalEpisode && (p.currentEpisode || 1) >= p.finalEpisode && p.isUploaded) return true;
       return false;
     }
 
-    /* ---------------- 타이머 제어 ---------------- */
+    /* ---------------- 타이머 및 히스토리 기록 ---------------- */
     function updateTimerDropdown() {
       const select = document.getElementById('timerProjSelect');
       const currentVal = select.value;
       select.innerHTML = '<option value="">작품 선택...</option>';
       
-      // 타이머에는 진행 중인 작품만 노출
       const activeProjects = projects.filter(p => !isProjectFinished(p));
       activeProjects.forEach(p => {
         let epText = p.type !== '단편' ? ` (${p.currentEpisode || 1}화)` : '';
@@ -554,19 +585,13 @@
     }
 
     function getElapsedSeconds() {
-      if (!isTimerRunning) {
-        return Math.floor(timerAccumulatedMs / 1000);
-      }
-      const currentElapsed = Date.now() - timerStartTime;
-      return Math.floor((timerAccumulatedMs + currentElapsed) / 1000);
+      if (!isTimerRunning) return Math.floor(timerAccumulatedMs / 1000);
+      return Math.floor((timerAccumulatedMs + (Date.now() - timerStartTime)) / 1000);
     }
 
     function startTimer() {
       const projId = document.getElementById('timerProjSelect').value;
-      if (!projId) {
-        alert('타이머를 시작할 작품을 먼저 선택해 주십시오.');
-        return;
-      }
+      if (!projId) { alert('타이머를 시작할 작품을 먼저 선택해 주십시오.'); return; }
 
       if (!isTimerRunning) {
         isTimerRunning = true;
@@ -615,15 +640,25 @@
       const chars = parseInt(inputVal);
 
       if (!isNaN(chars) && chars > 0) {
-        const today = new Date().toISOString().slice(0, 10);
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         const currentEp = p.currentEpisode || 1;
 
+        // 회차별 작성량 합산
         const existingLog = p.logs.find(l => l.date === today && l.episode === currentEp);
-        if (existingLog) {
-          existingLog.chars += chars;
-        } else {
-          p.logs.push({ date: today, episode: currentEp, chars: chars });
-        }
+        if (existingLog) existingLog.chars += chars;
+        else p.logs.push({ date: today, episode: currentEp, chars: chars });
+
+        // 히스토리 항목 누적 저장
+        if (!p.history) p.history = [];
+        p.history.push({
+          id: Date.now(),
+          timestamp: `${today} ${timeStr}`,
+          episode: currentEp,
+          duration: timeDesc,
+          chars: chars
+        });
 
         document.getElementById('timerSummary').innerText = `최근 기록: ${timeDesc} 동안 ${chars.toLocaleString()}자 작성 완료!`;
         saveState();
@@ -638,6 +673,58 @@
       document.getElementById('btnTimerStart').disabled = false;
       document.getElementById('btnTimerPause').disabled = true;
       document.getElementById('btnTimerStop').disabled = true;
+    }
+
+    /* ---------------- 히스토리 모달 제어 ---------------- */
+    function openHistoryModal() {
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = '';
+
+      let allLogs = [];
+      projects.forEach(p => {
+        if (p.history && Array.isArray(p.history)) {
+          p.history.forEach(h => {
+            allLogs.push({ ...h, projTitle: p.title, projId: p.id, type: p.type });
+          });
+        }
+      });
+
+      // 최근 기록 순 정렬
+      allLogs.sort((a, b) => b.id - a.id);
+
+      if (allLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1rem;">기록된 마감 히스토리가 없습니다.</td></tr>';
+      } else {
+        allLogs.forEach(item => {
+          const epText = item.type !== '단편' ? ` (${item.episode}화)` : '';
+          tbody.innerHTML += `
+            <tr>
+              <td>${item.timestamp}</td>
+              <td><strong>${item.projTitle}</strong>${epText}</td>
+              <td>${item.duration}</td>
+              <td><strong style="color:var(--primary);">${item.chars.toLocaleString()}자</strong></td>
+              <td><button class="btn-sm btn-danger" onclick="deleteHistoryItem(${item.projId}, ${item.id})">삭제</button></td>
+            </tr>
+          `;
+        });
+      }
+
+      document.getElementById('historyModal').style.display = 'flex';
+    }
+
+    function closeHistoryModal() {
+      document.getElementById('historyModal').style.display = 'none';
+    }
+
+    function deleteHistoryItem(projId, historyId) {
+      if (confirm('이 마감 작업 기록을 삭제하시겠습니까?')) {
+        const p = projects.find(item => item.id === projId);
+        if (p && p.history) {
+          p.history = p.history.filter(h => h.id !== historyId);
+          saveState();
+          openHistoryModal();
+        }
+      }
     }
 
     /* ---------------- 스케줄 계산 로직 ---------------- */
@@ -863,6 +950,7 @@
           isUploaded: false,
           isCompletedManual: false,
           logs: [],
+          history: [],
           files: [{ id: Date.now(), name: '콘티.txt', content: '' }]
         });
       }
@@ -875,13 +963,11 @@
       const p = projects.find(item => item.id === id);
       p.isUploaded = !p.isUploaded;
 
-      // 1. 단편: 업로드 완료 시 즉시 완료 목록으로 이동
       if (p.type === '단편') {
         saveState();
         return;
       }
 
-      // 2. 장편(자유형)
       if (p.isUploaded && p.type === '장편(자유형)') {
         const nextEp = (p.currentEpisode || 1) + 1;
         setTimeout(() => {
@@ -904,7 +990,6 @@
         return;
       }
 
-      // 3. 장편(주기형)
       if (p.isUploaded && p.type === '장편(주기형)') {
         const nextEp = (p.currentEpisode || 1) + 1;
         if (p.finalEpisode && (p.currentEpisode || 1) >= p.finalEpisode) {
@@ -934,7 +1019,6 @@
       saveState();
     }
 
-    // 완료된 작품을 다시 '진행 중'으로 복원하는 함수
     function restoreProject(id) {
       const p = projects.find(item => item.id === id);
       if (confirm(`'${p.title}' 작품을 다시 '진행 중' 마감 목록으로 복원하시겠습니까?`)) {
@@ -952,7 +1036,6 @@
       }
     }
 
-    /* ---------------- 마감 목록 렌더링 (탭 스위치 적용) ---------------- */
     function renderProjects() {
       const container = document.getElementById('projectList');
       container.innerHTML = '';
@@ -960,14 +1043,12 @@
       const now = new Date();
       const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
 
-      // 탭 카운트 계산
       const activeProjects = projects.filter(p => !isProjectFinished(p));
       const completedProjects = projects.filter(p => isProjectFinished(p));
 
       document.getElementById('tabActive').innerText = `진행 중 (${activeProjects.length})`;
       document.getElementById('tabCompleted').innerText = `완료됨 (${completedProjects.length})`;
 
-      // 현재 선택된 탭의 목록 선택
       const currentList = currentListTab === 'active' ? activeProjects : completedProjects;
 
       if (currentList.length === 0) {
@@ -977,7 +1058,6 @@
         return;
       }
 
-      // D-Day 임박 순 정렬
       const sortedProjects = [...currentList].sort((a, b) => {
         const getDiff = (proj) => {
           if (!proj.dueDate) return Infinity;
@@ -1045,7 +1125,7 @@
       });
     }
 
-    /* ---------------- 캘린더 렌더링 ---------------- */
+    /* ---------------- 캘린더 렌더링 (마감 vs 작성량 디자인 구분 적용) ---------------- */
     function changeMonth(delta) {
       calDate.setMonth(calDate.getMonth() + delta);
       renderCalendar();
@@ -1078,21 +1158,23 @@
         let tagsHtml = '';
 
         projects.forEach(p => {
+          // 1. 작성량 태그 (연두색 둥근 배지 스타일 적용)
           const dayLogs = p.logs.filter(log => log.date === dateStr);
           const dayChars = dayLogs.reduce((sum, log) => sum + log.chars, 0);
           if (dayChars > 0) {
-            tagsHtml += `<div class="cal-tag" style="background:${p.color}">+${dayChars}자</div>`;
+            tagsHtml += `<div class="cal-tag-char">✍️ +${dayChars.toLocaleString()}자</div>`;
             if (dateStr === todayStr) todaySum += dayChars;
           }
 
+          // 2. 마감일 태그 (네모 박스 진한 식별 라벨 적용)
           if (p.type !== '장편(주기형)' && p.dueDate === dateStr) {
-            tagsHtml += `<div class="cal-tag" style="background:${p.color}; outline:1px solid #000;">[마감] ${p.title}</div>`;
+            tagsHtml += `<div class="cal-tag-due" style="background:${p.color}">📌 [마감] ${p.title}</div>`;
           }
 
           if (p.type === '장편(주기형)' && p.schedule) {
             p.schedule.forEach(sch => {
               if (sch.dueDate === dateStr) {
-                tagsHtml += `<div class="cal-tag" style="background:${p.color}; outline:1px solid #000;">[${sch.episode}화] ${p.title}</div>`;
+                tagsHtml += `<div class="cal-tag-due" style="background:${p.color}">📌 [${sch.episode}화] ${p.title}</div>`;
               }
             });
           }
